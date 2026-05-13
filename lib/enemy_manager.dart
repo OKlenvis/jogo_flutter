@@ -7,8 +7,16 @@ class EnemyManager extends Component with HasGameRef<VampireGame> {
   late Timer timer;
   Random random = Random();
 
-  EnemyManager() {
-    timer = Timer(1.5, onTick: _spawnEnemy, repeat: true);
+  @override
+  void onMount() {
+    super.onMount();
+    
+    // Define o tempo de surgimento baseado na dificuldade
+    double spawnTempo = 1.5; // Médio
+    if (gameRef.dificuldade == 'FÁCIL') spawnTempo = 2.2;
+    if (gameRef.dificuldade == 'DIFÍCIL') spawnTempo = 0.7;
+
+    timer = Timer(spawnTempo, onTick: _spawnEnemy, repeat: true);
   }
 
   void _spawnEnemy() {

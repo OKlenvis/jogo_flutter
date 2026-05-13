@@ -2,6 +2,7 @@ import 'package:flame/game.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
 
+// Componentes do seu jogo
 import 'player.dart';
 import 'enemy_manager.dart';
 import 'start_menu.dart';
@@ -24,6 +25,7 @@ class GameApp extends StatelessWidget {
       home: Scaffold(
         body: GameWidget<VampireGame>(
           game: VampireGame(),
+          // Configuração das telas de interface (Overlays)
           overlayBuilderMap: {
             'Menu': (context, game) => StartMenu(game: game),
             'Pause': (context, game) => PauseMenu(game: game),
@@ -50,12 +52,16 @@ class GameApp extends StatelessWidget {
 
 class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
   late Player player; 
-  String dificuldade = 'MÉDIO';
+  
+  // Variáveis de Estado
+  String dificuldade = 'MÉDIO'; // Controla velocidade e spawn
   int score = 0;
   int bestScore = 0;
 
   @override
   Color backgroundColor() => const Color(0xFF0D0B1E);
+
+  // --- LÓGICA DE CONTROLE DO JOGO ---
 
   void iniciarJogo() {
     score = 0;
@@ -78,7 +84,9 @@ class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandl
 
   void finalizarJogo() {
     pauseEngine();
-    if (score > bestScore) bestScore = score;
+    if (score > bestScore) {
+      bestScore = score;
+    }
     overlays.removeAll(['PauseButton', 'ScoreHUD']);
     overlays.add('GameOver');
   }
@@ -98,11 +106,21 @@ class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandl
     overlays.add('Menu');
   }
 
+  // --- MONTAGEM DO MUNDO ---
+
   void _montarCenario() {
+    // Limpa componentes de partidas anteriores
     removeAll(children); 
+    
+    // Adiciona o mapa de fundo
     add(CityMap());
+    
+    // Adiciona o caçador (Player)
     player = Player();
     add(player);
+    
+    // Adiciona o gerenciador de vampiros
+    // Ele lerá a 'dificuldade' assim que for adicionado (onMount)
     add(EnemyManager());
   }
 }
