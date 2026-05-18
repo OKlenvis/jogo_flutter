@@ -1,15 +1,18 @@
 import 'package:flame/game.dart';
 import 'package:flame/events.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart'; 
 
-// Componentes do seu jogo
+// Seus componentes e arquivos do jogo
 import 'player.dart';
 import 'enemy_manager.dart';
+import 'city_map.dart';
+
+// Seus arquivos de menus e interfaces
 import 'start_menu.dart';
 import 'pause_menu.dart';
 import 'game_over_menu.dart';
 import 'score_hud.dart';
-import 'city_map.dart';
 
 void main() {
   runApp(const GameApp());
@@ -25,7 +28,6 @@ class GameApp extends StatelessWidget {
       home: Scaffold(
         body: GameWidget<VampireGame>(
           game: VampireGame(),
-          // Configuração das telas de interface (Overlays)
           overlayBuilderMap: {
             'Menu': (context, game) => StartMenu(game: game),
             'Pause': (context, game) => PauseMenu(game: game),
@@ -51,27 +53,62 @@ class GameApp extends StatelessWidget {
 }
 
 class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandlerComponents {
-  late Player player; 
-  
-  // Variáveis de Estado
-  String dificuldade = 'MÉDIO'; // Controla velocidade e spawn
+  late Player player;
   int score = 0;
   int bestScore = 0;
+  String dificuldade = 'MÉDIO'; 
+
+  // --- CÁLCULO DE DIFICULDADE PROGRESSIVA ---
+  double get multiplicadorDificuldade {
+    int leveisPassados = score ~/ 500; 
+    return 1.0 + (leveisPassados * 0.20); 
+  }
 
   @override
   Color backgroundColor() => const Color(0xFF0D0B1E);
 
-  // --- LÓGICA DE CONTROLE DO JOGO ---
+  // --- ESCUTA DA TECLA ESC PARA PAUSAR ---
+  @override
+  KeyEventResult onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
+    final isKeyDown = event is KeyDownEvent;
+    
+    // Se apertar ESC e o jogo estiver rodando (botão de pause ativo e menu de pause fechado)
+    if (isKeyDown && event.logicalKey == LogicalKeyboardKey.escape) {
+      if (overlays.isActive('PauseButton') && !overlays.isActive('Pause')) {
+        pausarJogo();
+        return KeyEventResult.handled; 
+      }
+    }
+    
+    return super.onKeyEvent(event, keysPressed);
+  }
+
+  // --- GERENCIAMENTO DE ENTIDADES E MUNDO ---
 
   void iniciarJogo() {
     score = 0;
     overlays.remove('Menu');
     overlays.addAll(['PauseButton', 'ScoreHUD']);
-    _montarCenario();
+    _montarMundo();
   }
 
+  void _montarMundo() {
+    removeAll(children);
+    
+    add(CityMap());
+    
+    player = Player();
+    add(player);
+    
+    add(EnemyManager());
+    
+    resumeEngine();
+  }
+
+  // --- CONTROLE DE TELAS (OVERLAYS) ---
+
   void pausarJogo() {
-    pauseEngine(); 
+    pauseEngine();
     overlays.add('Pause');
     overlays.remove('PauseButton');
   }
@@ -84,19 +121,20 @@ class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandl
 
   void finalizarJogo() {
     pauseEngine();
-    if (score > bestScore) {
-      bestScore = score;
-    }
+    if (score > bestScore) bestScore = score;
     overlays.removeAll(['PauseButton', 'ScoreHUD']);
     overlays.add('GameOver');
   }
 
   void reiniciarJogo() {
     score = 0;
+    // Remove qualquer menu que possa estar aberto antes de recriar o mundo
     overlays.remove('GameOver');
-    resumeEngine();
-    _montarCenario();
+    overlays.remove('Pause'); 
+    
+    _montarMundo();
     overlays.addAll(['PauseButton', 'ScoreHUD']);
+    resumeEngine(); // Garante que o motor do jogo volte a rodar
   }
 
   void sairDoJogo() {
@@ -104,23 +142,5 @@ class VampireGame extends FlameGame with HasCollisionDetection, HasKeyboardHandl
     resumeEngine();
     overlays.removeAll(['Pause', 'PauseButton', 'GameOver', 'ScoreHUD']);
     overlays.add('Menu');
-  }
-
-  // --- MONTAGEM DO MUNDO ---
-
-  void _montarCenario() {
-    // Limpa componentes de partidas anteriores
-    removeAll(children); 
-    
-    // Adiciona o mapa de fundo
-    add(CityMap());
-    
-    // Adiciona o caçador (Player)
-    player = Player();
-    add(player);
-    
-    // Adiciona o gerenciador de vampiros
-    // Ele lerá a 'dificuldade' assim que for adicionado (onMount)
-    add(EnemyManager());
   }
 }

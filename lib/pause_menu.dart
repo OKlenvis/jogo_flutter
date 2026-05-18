@@ -1,72 +1,96 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'main.dart';
 
-class PauseMenu extends StatelessWidget {
+class PauseMenu extends StatefulWidget {
   final VampireGame game;
   const PauseMenu({super.key, required this.game});
 
-  TextStyle pixelStyle({double size = 20, Color color = const Color(0xFFFF5252)}) {
-    return GoogleFonts.pressStart2p(
-      textStyle: TextStyle(
-        color: color,
-        fontSize: size,
-        shadows: const [
-          Shadow(offset: Offset(3, 3), color: Colors.black),
-        ],
-      ),
-    );
+  @override
+  State<PauseMenu> createState() => _PauseMenuState();
+}
+
+class _PauseMenuState extends State<PauseMenu> {
+  int _opcaoSelecionada = 0; // 0: Continuar, 1: Reiniciar, 2: Sair
+  final int _totalOpcoes = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_tratarTecladoGlobal);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_tratarTecladoGlobal);
+    super.dispose();
+  }
+
+  bool _tratarTecladoGlobal(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final key = event.logicalKey;
+      if (key == LogicalKeyboardKey.keyW || key == LogicalKeyboardKey.keyA) {
+        _moverSelecao(-1);
+        return true;
+      } else if (key == LogicalKeyboardKey.keyS || key == LogicalKeyboardKey.keyD) {
+        _moverSelecao(1);
+        return true;
+      } else if (key == LogicalKeyboardKey.enter) {
+        _executarAcao();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _moverSelecao(int direcao) {
+    setState(() {
+      _opcaoSelecionada = (_opcaoSelecionada + direcao) % _totalOpcoes;
+      if (_opcaoSelecionada < 0) _opcaoSelecionada = _totalOpcoes - 1;
+    });
+  }
+
+  void _executarAcao() {
+    if (_opcaoSelecionada == 0) {
+      widget.game.retomarJogo();
+    } else if (_opcaoSelecionada == 1) {
+      widget.game.reiniciarJogo();
+    } else {
+      widget.game.sairDoJogo();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black.withOpacity(0.8), // Fundo um pouco mais escuro para o texto brilhar
-      child: Center(
+    return Scaffold(
+      backgroundColor: Colors.black.withOpacity(0.75),
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('PAUSADO', style: pixelStyle(size: 40)),
-            
-            const SizedBox(height: 40),
-
-            // A provocação adicionada
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Text(
-                'Vai fugir é seu COCO?\nSabia que não era capaz!',
-                textAlign: TextAlign.center,
-                style: pixelStyle(size: 12, color: Colors.yellow).copyWith(
-                  height: 1.8, // Espaçamento entre as linhas da provocação
-                ),
-              ),
-            ),
-
-            const SizedBox(height: 60),
-
-            // Opções do Menu
-            _pauseButton('RESUME', () => game.retomarJogo()),
-            
-            const SizedBox(height: 20),
-
-            _pauseButton('RESTART', () => game.reiniciarJogo()),
-
-            const SizedBox(height: 20),
-
-            _pauseButton('QUIT', () => game.sairDoJogo()),
+            const Text('JOGO PAUSADO', style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 50),
+            _construirBotao(texto: 'CONTINUAR', index: 0, onPressed: widget.game.retomarJogo),
+            const SizedBox(height: 15),
+            _construirBotao(texto: 'REINICIAR PARTIDA', index: 1, onPressed: widget.game.reiniciarJogo),
+            const SizedBox(height: 15),
+            _construirBotao(texto: 'SAIR PARA O MENU', index: 2, onPressed: widget.game.sairDoJogo),
           ],
         ),
       ),
     );
   }
 
-  Widget _pauseButton(String text, VoidCallback onTap) {
-    return TextButton(
-      onPressed: onTap,
-      child: Text(
-        '> $text', 
-        style: pixelStyle(size: 18, color: Colors.white),
+  Widget _construirBotao({required String texto, required int index, required VoidCallback onPressed}) {
+    final bool estaSel = _opcaoSelecionada == index;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: estaSel ? Colors.yellowAccent : Colors.grey, width: estaSel ? 3 : 1),
+        backgroundColor: estaSel ? Colors.white10 : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
       ),
+      onPressed: onPressed,
+      child: Text(estaSel ? '> $texto <' : texto, style: TextStyle(color: estaSel ? Colors.yellowAccent : Colors.white, fontSize: 18)),
     );
   }
 }

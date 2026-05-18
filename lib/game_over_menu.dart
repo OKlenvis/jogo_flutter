@@ -1,41 +1,94 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:flutter/services.dart';
 import 'main.dart';
 
-class GameOverMenu extends StatelessWidget {
+class GameOverMenu extends StatefulWidget {
   final VampireGame game;
   const GameOverMenu({super.key, required this.game});
 
-  TextStyle pixelStyle({double size = 20, Color color = Colors.red}) {
-    return GoogleFonts.pressStart2p(
-      textStyle: TextStyle(color: color, fontSize: size, shadows: const [Shadow(offset: Offset(2, 2), color: Colors.black)]),
-    );
+  @override
+  State<GameOverMenu> createState() => _GameOverMenuState();
+}
+
+class _GameOverMenuState extends State<GameOverMenu> {
+  int _opcaoSelecionada = 0; // 0: Reiniciar, 1: Sair
+  final int _totalOpcoes = 2;
+
+  @override
+  void initState() {
+    super.initState();
+    HardwareKeyboard.instance.addHandler(_tratarTecladoGlobal);
+  }
+
+  @override
+  void dispose() {
+    HardwareKeyboard.instance.removeHandler(_tratarTecladoGlobal);
+    super.dispose();
+  }
+
+  bool _tratarTecladoGlobal(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final key = event.logicalKey;
+      if (key == LogicalKeyboardKey.keyW || key == LogicalKeyboardKey.keyA) {
+        _moverSelecao(-1);
+        return true;
+      } else if (key == LogicalKeyboardKey.keyS || key == LogicalKeyboardKey.keyD) {
+        _moverSelecao(1);
+        return true;
+      } else if (key == LogicalKeyboardKey.enter) {
+        _executarAcao();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  void _moverSelecao(int direcao) {
+    setState(() {
+      _opcaoSelecionada = (_opcaoSelecionada + direcao) % _totalOpcoes;
+      if (_opcaoSelecionada < 0) _opcaoSelecionada = _totalOpcoes - 1;
+    });
+  }
+
+  void _executarAcao() {
+    if (_opcaoSelecionada == 0) {
+      widget.game.reiniciarJogo();
+    } else {
+      widget.game.sairDoJogo();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.black.withOpacity(0.9),
-      child: Center(
+    return Scaffold(
+      backgroundColor: const Color(0xFF1A0000).withOpacity(0.9),
+      body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text('GAME OVER', style: pixelStyle(size: 30)),
+            const Text('FIM DE JOGO', style: TextStyle(color: Colors.red, fontSize: 48, fontWeight: FontWeight.bold)),
             const SizedBox(height: 20),
-            Text('Não aguentou a pressão né seu frango!', textAlign: TextAlign.center, style: pixelStyle(size: 10, color: Colors.yellow)),
-            const SizedBox(height: 40),
-            Text('SCORE: ${game.score}', style: pixelStyle(size: 18, color: Colors.white)),
-            Text('BEST: ${game.bestScore}', style: pixelStyle(size: 14, color: Colors.orange)),
-            const SizedBox(height: 60),
-            _btn('> REINICIAR', () => game.reiniciarJogo()),
-            _btn('> QUIT', () => game.sairDoJogo()),
+            Text('Pontuação: ${widget.game.score}', style: const TextStyle(color: Colors.white, fontSize: 22)),
+            const SizedBox(height: 50),
+            _construirBotao(texto: 'REINICIAR JOGO', index: 0, onPressed: widget.game.reiniciarJogo),
+            const SizedBox(height: 20),
+            _construirBotao(texto: 'MENU PRINCIPAL', index: 1, onPressed: widget.game.sairDoJogo),
           ],
         ),
       ),
     );
   }
 
-  Widget _btn(String text, VoidCallback onTap) {
-    return TextButton(onPressed: onTap, child: Text(text, style: pixelStyle(size: 16, color: Colors.white)));
+  Widget _construirBotao({required String texto, required int index, required VoidCallback onPressed}) {
+    final bool estaSel = _opcaoSelecionada == index;
+    return OutlinedButton(
+      style: OutlinedButton.styleFrom(
+        side: BorderSide(color: estaSel ? Colors.yellowAccent : Colors.grey, width: estaSel ? 3 : 1),
+        backgroundColor: estaSel ? Colors.white10 : Colors.transparent,
+        padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 15),
+      ),
+      onPressed: onPressed,
+      child: Text(estaSel ? '> $texto <' : texto, style: TextStyle(color: estaSel ? Colors.yellowAccent : Colors.white, fontSize: 18)),
+    );
   }
 }
