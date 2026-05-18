@@ -1,65 +1,87 @@
 import 'dart:math';
 import 'package:flame/components.dart';
 import 'main.dart';
-import 'enemy.dart'; // Certifique-se de que o nome do arquivo do seu inimigo está correto
+import 'enemy.dart'; 
 
 class EnemyManager extends Component with HasGameRef<VampireGame> {
   late Timer _timerSpawn;
+  late Timer _timerDificuldade;
   final Random _random = Random();
+
+  // Configurações iniciais de tempo (em segundos)
+  double _intervaloAtual = 2.0; // Começa nascendo 1 inimigo a cada 2 segundos
+  final double _intervaloMinimo = 0.3; // Limite máximo para não travar o jogo (3 inimigos por segundo)
 
   @override
   Future<void> onLoad() async {
-    // Configura o temporizador para tentar spawnar um inimigo a cada 1.5 segundos
-    // Você pode diminuir esse tempo se quiser mais inimigos na tela ao mesmo tempo
+    // 1. Timer que cria os inimigos na tela usando o intervalo dinâmico
     _timerSpawn = Timer(
-      1.5,
+      _intervaloAtual,
       onTick: _spawnInimigo,
+      repeat: true,
+    );
+
+    // 2. NOVO: Timer que aumenta a dificuldade a cada 10 segundos
+    _timerDificuldade = Timer(
+      10.0,
+      onTick: _aumentarDificuldade,
       repeat: true,
     );
   }
 
+  void _aumentarDificuldade() {
+    if (gameRef.paused) return;
+
+    // Reduz o tempo de espera para spawnar o próximo inimigo (nascem mais rápido)
+    if (_intervaloAtual > _intervaloMinimo) {
+      _intervaloAtual -= 0.15; // Diminui 0.15 segundos do tempo de espera a cada 10s
+      
+      // Garante que não fique menor que o limite mínimo seguro
+      if (_intervaloAtual < _intervaloMinimo) {
+        _intervaloAtual = _intervaloMinimo;
+      }
+
+      // Atualiza o timer de spawn com a nova velocidade acelerada
+      _timerSpawn.limit = _intervaloAtual;
+      
+      print('Dificuldade Aumentou! Novo intervalo de spawn: ${_intervaloAtual.toStringAsFixed(2)}s');
+    }
+  }
+
   void _spawnInimigo() {
-    // Evita spawnar se o jogo estiver pausado ou nos menus
     if (gameRef.paused) return;
 
     Vector2 posicaoSpawn = Vector2.zero();
-    
-    // Escolhe aleatoriamente uma das 4 bordas: 0=Cima, 1=Baixo, 2=Esquerda, 3=Direita
     int bordaAleatoria = _random.nextInt(4);
-
-    // Margem segura para o inimigo nascer totalmente fora da visão da tela
     const double margemForaDaTela = 50.0; 
 
     switch (bordaAleatoria) {
-      case 0: // --- BORDA DE CIMA ---
+      case 0: // Cima
         posicaoSpawn.x = _random.nextDouble() * gameRef.size.x;
         posicaoSpawn.y = -margemForaDaTela;
         break;
-        
-      case 1: // --- BORDA DE BAIXO ---
+      case 1: // Baixo
         posicaoSpawn.x = _random.nextDouble() * gameRef.size.x;
         posicaoSpawn.y = gameRef.size.y + margemForaDaTela;
         break;
-        
-      case 2: // --- BORDA DA ESQUERDA ---
+      case 2: // Esquerda
         posicaoSpawn.x = -margemForaDaTela;
         posicaoSpawn.y = _random.nextDouble() * gameRef.size.y;
         break;
-        
-      case 3: // --- BORDA DA DIREITA ---
+      case 3: // Direita
         posicaoSpawn.x = gameRef.size.x + margemForaDaTela;
         posicaoSpawn.y = _random.nextDouble() * gameRef.size.y;
         break;
     }
 
-    // Cria o inimigo passando a posição sorteada
-    // (Ajuste o nome da classe 'Enemy' caso o seu tenha outro nome, ex: Inimigo)
     final inimigo = Enemy(position: posicaoSpawn);
     gameRef.add(inimigo);
   }
 
   @override
   void update(double dt) {
+    // Atualiza os dois contadores de tempo a cada frame do jogo
     _timerSpawn.update(dt);
+    _timerDificuldade.update(dt);
   }
 }
