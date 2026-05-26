@@ -14,5 +14,7 @@ dependencies:
 
 flutter:
   uses-material-design: true
+
+  # Adicione exatamente estas duas linhas abaixo:
   assets:
-  -  images/
+    - assets/images/

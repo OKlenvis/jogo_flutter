@@ -36,7 +36,7 @@ class GunDrop extends PositionComponent with HasGameRef, CollisionCallbacks {
   void onCollisionStart(Set<Vector2> points, PositionComponent other) {
     super.onCollisionStart(points, other);
     if (other is Player) {
-      other.coletarArma();
+      other.coletarArma;
       removeFromParent(); // Remove o item do chão após coletar
     }
   }

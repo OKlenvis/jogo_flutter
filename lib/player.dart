@@ -1,161 +1,203 @@
-import 'dart:math' as math;
 import 'package:flame/components.dart';
-import 'package:flame/collisions.dart';
+import 'package:flame/flame.dart';
+import 'package:flame/collisions.dart'; // Importante para detectar quando o inimigo encosta
 import 'package:flutter/services.dart';
-import 'package:flutter/material.dart';
+import 'main.dart'; 
+import 'attack_area.dart'; 
+import 'enemy.dart'; // Importa o arquivo do inimigo para fazer a verificação
 
-import 'main.dart';
-import 'enemy.dart';
-import 'bullet.dart';
-import 'sword.dart';
-
-class Player extends PositionComponent with HasGameRef<VampireGame>, CollisionCallbacks, KeyboardHandler {
-  double speed = 250;
-  Vector2 direction = Vector2.zero();
-  Vector2 lastDirection = Vector2(1, 0); 
+class Player extends SpriteAnimationComponent with HasGameRef<VampireGame>, KeyboardHandler, CollisionCallbacks {
   
-  bool temArma = false; // Se já coletou o item da arma
-  bool usandoArma = false; // Qual arma está na mão no momento
-  bool podeAtacar = true;
-  double timerAux = 0;
+  Vector2 direcao = Vector2.zero();
+  final double velocidade = 150.0; 
+  
+  // Animações de Movimento
+  late final SpriteAnimation _animacaoCima;
+  late final SpriteAnimation _animacaoBaixo;
+  late final SpriteAnimation _animacaoEsquerda;
+  late final SpriteAnimation _animacaoDireita;
 
-  Player() : super(size: Vector2(45, 55), anchor: Anchor.center);
+  // Animações de Ataque (1 frame cada)
+  late final SpriteAnimation _ataqueCima;
+  late final SpriteAnimation _ataqueBaixo;
+  late final SpriteAnimation _ataqueEsquerda;
+  late final SpriteAnimation _ataqueDireita;
+
+  // Controle de estado do ataque
+  bool estaAtacando = false;
+  double tempoAtaque = 0.0;
+  final double duracaoAtaque = 0.1; 
+  
+  AttackArea? areaAtaqueAtual;
+  String ultimaDirecao = 'baixo';
+
+  dynamic arma; 
+  bool temArma = false; 
+
+  Player() : super(size: Vector2(64, 64)); 
 
   @override
   Future<void> onLoad() async {
-    priority = 10;
-    add(RectangleHitbox(size: Vector2(30, 45), position: Vector2(7.5, 5)));
-    position = gameRef.size / 2;
-  }
+    super.onLoad();
 
-  // Chamado quando o jogador coleta o item de arma no chão
-  void coletarArma() {
-    temArma = true;
-    usandoArma = true; // Muda automaticamente para a arma ao coletar
-  }
+    final imgCima = await Flame.images.load('player_up.png');
+    final imgBaixo = await Flame.images.load('player_down.png');
+    final imgEsquerda = await Flame.images.load('player_left.png');
+    final imgDireita = await Flame.images.load('player_right.png');
 
-  void _atacar() {
-    if (!podeAtacar) return;
+    final imgAtqCima = await Flame.images.load('player_attack_up.png');
+    final imgAtqBaixo = await Flame.images.load('player_attack_down.png');
+    final imgAtqEsquerda = await Flame.images.load('player_attack_left.png');
+    final imgAtqDireita = await Flame.images.load('player_attack_right.png');
 
-    double cooldown;
-
-    if (temArma && usandoArma) {
-      // --- ATAQUE COM ARMA (FOGO) ---
-      cooldown = 0.18;
-      final inimigos = gameRef.children.query<Enemy>();
-      
-      if (inimigos.isNotEmpty) {
-        Enemy alvo = inimigos.first;
-        double menorDistancia = position.distanceTo(alvo.position);
-
-        for (var inimigo in inimigos) {
-          double dist = position.distanceTo(inimigo.position);
-          if (dist < menorDistancia) {
-            menorDistancia = dist;
-            alvo = inimigo;
-          }
-        }
-        Vector2 direcaoTiro = (alvo.position - position).normalized();
-        gameRef.add(Bullet(position: position.clone(), velocity: direcaoTiro * 450));
-      } else {
-        gameRef.add(Bullet(position: position.clone(), velocity: lastDirection * 450));
-      }
-    } else {
-      // --- ATAQUE COM ESPADA (CORTE) ---
-      cooldown = 0.25;
-      double angulo = math.atan2(lastDirection.y, lastDirection.x);
-      gameRef.add(Sword(position: position.clone(), angle: angulo));
+    SpriteAnimation criarAnimacaoMovimento(dynamic imagem) {
+      return SpriteAnimation.fromFrameData(
+        imagem,
+        SpriteAnimationData([
+          SpriteAnimationFrameData(srcPosition: Vector2(4, 0), srcSize: Vector2(287, 287), stepTime: 0.12),
+          SpriteAnimationFrameData(srcPosition: Vector2(291, 0), srcSize: Vector2(287, 287), stepTime: 0.12),
+          SpriteAnimationFrameData(srcPosition: Vector2(578, 0), srcSize: Vector2(287, 287), stepTime: 0.12),
+        ]),
+      );
     }
 
-    podeAtacar = false;
-    timerAux = 0;
-    _setCooldown(cooldown);
+    SpriteAnimation criarAnimacaoAtaque(dynamic imagem) {
+      return SpriteAnimation.spriteList(
+        [Sprite(imagem)],
+        stepTime: duracaoAtaque,
+      );
+    }
+
+    _animacaoCima = criarAnimacaoMovimento(imgCima);
+    _animacaoBaixo = criarAnimacaoMovimento(imgBaixo);
+    _animacaoEsquerda = criarAnimacaoMovimento(imgEsquerda);
+    _animacaoDireita = criarAnimacaoMovimento(imgDireita);
+
+    _ataqueCima = criarAnimacaoAtaque(imgAtqCima);
+    _ataqueBaixo = criarAnimacaoAtaque(imgAtqBaixo);
+    _ataqueEsquerda = criarAnimacaoAtaque(imgAtqEsquerda);
+    _ataqueDireita = criarAnimacaoAtaque(imgAtqDireita);
+
+    animation = _animacaoBaixo;
+    position = gameRef.size / 2; 
+    anchor = Anchor.center; 
+
+    // Caixa de colisão do corpo do jogador
+    add(RectangleHitbox());
   }
 
-  double _currentCooldown = 0.25;
-  void _setCooldown(double val) => _currentCooldown = val;
+  // CONFIGURAÇÃO DE MORTE: Detecta quando um inimigo encosta no corpo do jogador
+  @override
+  void onCollisionStart(Set<Vector2> intersectionPoints, PositionComponent other) {
+    super.onCollisionStart(intersectionPoints, other);
+
+    // Se o que encostou na gente for um Inimigo
+    if (other is Enemy) {
+      // Remove o jogador da tela
+      removeFromParent();
+      
+      // CHAMA A SUA TELA DE GAME OVER QUE JÁ EXISTE NO MAIN
+      // Nota: Mude "gameOver()" para o nome exato da função ou overlay que você usa no seu VampireGame
+      gameRef.overlays.add('GameOver'); 
+      // Se o seu jogo usa uma função direta ao invés de overlay, seria: gameRef.gameOver();
+    }
+  }
+
+  void coletarArma(dynamic novaArma) {
+    arma = novaArma;
+    temArma = true;
+    add(arma); 
+  }
+
+  void atacar() {
+    if (areaAtaqueAtual != null) {
+      areaAtaqueAtual?.removeFromParent();
+      areaAtaqueAtual = null;
+    }
+
+    estaAtacando = true;
+    tempoAtaque = 0.0;
+
+    Vector2 posicaoAtaque = Vector2.zero();
+    Vector2 tamanhoAtaque = Vector2.zero();
+
+    if (ultimaDirecao == 'cima') {
+      animation = _ataqueCima;
+      posicaoAtaque = Vector2(0, -20); 
+      tamanhoAtaque = Vector2(64, 20); 
+    } else if (ultimaDirecao == 'baixo') {
+      animation = _ataqueBaixo;
+      posicaoAtaque = Vector2(0, 44);  
+      tamanhoAtaque = Vector2(64, 20); 
+    } else if (ultimaDirecao == 'esquerda') {
+      animation = _ataqueEsquerda;
+      posicaoAtaque = Vector2(-20, 0); 
+      tamanhoAtaque = Vector2(20, 64); 
+    } else if (ultimaDirecao == 'direita') {
+      animation = _ataqueDireita;
+      posicaoAtaque = Vector2(44, 0);  
+      tamanhoAtaque = Vector2(20, 64); 
+    }
+    
+    areaAtaqueAtual = AttackArea(position: posicaoAtaque, size: tamanhoAtaque);
+    add(areaAtaqueAtual!);
+
+    animationTicker?.reset();
+  }
 
   @override
   void update(double dt) {
     super.update(dt);
-    if (!podeAtacar) {
-      timerAux += dt;
-      if (timerAux >= _currentCooldown) podeAtacar = true;
-    }
-
-    if (!direction.isZero()) {
-      lastDirection = direction.normalized();
-    }
-
-    position.add(direction * speed * dt);
-    position.clamp(Vector2.zero() + size / 2, gameRef.size - size / 2);
-  }
-
-  @override
-  void render(Canvas canvas) {
-    final bool lookingLeft = lastDirection.x < 0;
     
-    if (lookingLeft) {
-      canvas.save();
-      canvas.translate(size.x, 0);
-      canvas.scale(-1, 1);
+    if (direcao.length > 0) {
+      position += direcao.normalized() * velocidade * dt;
     }
 
-    final brownDark = Paint()..color = const Color(0xFF3E2723);
-    final brownLight = Paint()..color = const Color(0xFF5D4037);
-    final skin = Paint()..color = const Color(0xFFFFCCBC);
-    final hatColor = Paint()..color = const Color(0xFF212121);
-    final detailRed = Paint()..color = const Color(0xFFD32F2F);
+    if (estaAtacando) {
+      tempoAtaque += dt;
+      if (tempoAtaque >= duracaoAtaque) {
+        estaAtacando = false; 
+        areaAtaqueAtual?.removeFromParent();
+        areaAtaqueAtual = null;
+      }
+      return; 
+    }
 
-    // Corpo e Capa
-    canvas.drawRect(const Rect.fromLTWH(10, 20, 25, 30), brownLight);
-    canvas.drawRect(const Rect.fromLTWH(8, 22, 29, 25), brownDark);
+    if (direcao.length > 0) {
+      animationTicker?.paused = false; 
 
-    // Rosto
-    canvas.drawRect(const Rect.fromLTWH(15, 10, 15, 15), skin);
-    canvas.drawRect(const Rect.fromLTWH(24, 15, 3, 3), Paint()..color = Colors.black);
-
-    // Chapéu
-    canvas.drawRect(const Rect.fromLTWH(5, 10, 35, 4), hatColor);
-    canvas.drawRect(const Rect.fromLTWH(13, 2, 19, 8), hatColor);
-    canvas.drawRect(const Rect.fromLTWH(13, 8, 19, 2), detailRed);
-
-    // INDICADOR DE ARMA NA MÃO
-    if (temArma && usandoArma) {
-      // Desenha a pistola na mão do caçador
-      canvas.drawRect(const Rect.fromLTWH(25, 25, 15, 8), Paint()..color = Colors.grey[700]!);
-      canvas.drawRect(const Rect.fromLTWH(35, 25, 3, 12), Paint()..color = Colors.grey[800]!);
+      if (direcao.y < 0) {
+        animation = _animacaoCima;
+        ultimaDirecao = 'cima';
+      } else if (direcao.y > 0) {
+        animation = _animacaoBaixo;
+        ultimaDirecao = 'baixo';
+      } else if (direcao.x < 0) {
+        animation = _animacaoEsquerda;
+        ultimaDirecao = 'esquerda';
+      } else if (direcao.x > 0) {
+        animation = _animacaoDireita;
+        ultimaDirecao = 'direita';
+      }
     } else {
-      // Desenha o cabo da espada aparecendo no ombro/costas
-      canvas.drawRect(const Rect.fromLTWH(5, 15, 6, 12), Paint()..color = Colors.blueGrey[800]!);
-      canvas.drawRect(const Rect.fromLTWH(2, 18, 12, 3), Paint()..color = Colors.amber);
+      animationTicker?.paused = true;  
+      animationTicker?.currentIndex = 0; 
     }
-
-    if (lookingLeft) canvas.restore();
   }
 
   @override
   bool onKeyEvent(KeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
-    direction.x = (keysPressed.contains(LogicalKeyboardKey.keyA) ? -1 : 0) + (keysPressed.contains(LogicalKeyboardKey.keyD) ? 1 : 0);
-    direction.y = (keysPressed.contains(LogicalKeyboardKey.keyW) ? -1 : 0) + (keysPressed.contains(LogicalKeyboardKey.keyS) ? 1 : 0);
+    direcao = Vector2.zero();
 
-    if (event is KeyDownEvent) {
-      // ATACAR COM P
-      if (event.logicalKey == LogicalKeyboardKey.keyP) {
-        _atacar();
-      }
-      
-      // ALTERNAR ARMA COM Q
-      if (event.logicalKey == LogicalKeyboardKey.keyQ && temArma) {
-        usandoArma = !usandoArma;
-      }
+    if (keysPressed.contains(LogicalKeyboardKey.keyW) || keysPressed.contains(LogicalKeyboardKey.arrowUp)) direcao.y -= 1;
+    if (keysPressed.contains(LogicalKeyboardKey.keyS) || keysPressed.contains(LogicalKeyboardKey.arrowDown)) direcao.y += 1;
+    if (keysPressed.contains(LogicalKeyboardKey.keyA) || keysPressed.contains(LogicalKeyboardKey.arrowLeft)) direcao.x -= 1;
+    if (keysPressed.contains(LogicalKeyboardKey.keyD) || keysPressed.contains(LogicalKeyboardKey.arrowRight)) direcao.x += 1;
+
+    if (keysPressed.contains(LogicalKeyboardKey.keyP)) {
+      atacar();
     }
-    return true;
-  }
 
-  @override
-  void onCollisionStart(Set<Vector2> points, PositionComponent other) {
-    super.onCollisionStart(points, other);
-    if (other is Enemy) gameRef.finalizarJogo();
+    return true; 
   }
 }
